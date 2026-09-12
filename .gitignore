@@ -1,0 +1,39 @@
+# Build artifacts
+*.o
+*.obj
+*.elf
+*.bin
+*.hex
+*.map
+
+# Compiled binaries from zone-controller-firmware
+sil_harness
+test_runner
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# CAD working files (keep exports, not autosave/lock files)
+*.FCBak
+~*.lock
+
+# Secrets — never commit these
+.env
+*.pem
+*.key
