@@ -1,0 +1,21 @@
+VERSION ""
+
+NS_ :
+
+BS_:
+
+BU_: ECU TESTER
+
+BO_ 2024 OBD_REQUEST: 8 TESTER
+ SG_ Mode : 8|8@0+ (1,0) [0|255] "" ECU
+ SG_ PID : 16|8@0+ (1,0) [0|255] "" ECU
+
+BO_ 2024 OBD_RESPONSE: 8 ECU
+ SG_ Mode : 8|8@0+ (1,0) [0|255] "" TESTER
+ SG_ PID : 16|8@0+ (1,0) [0|255] "" TESTER
+ SG_ EngineRPM : 24|16@0+ (0.25,0) [0|8000] "rpm" TESTER
+ SG_ VehicleSpeed : 24|8@0+ (1,0) [0|300] "km/h" TESTER
+ SG_ CoolantTemp : 24|8@0+ (1,-40) [-40|215] "degC" TESTER
+ SG_ FuelLevel : 24|8@0+ (0.392157,0) [0|100] "percent" TESTER
+
+CM_ BO_ 2024 "Simplified single-frame OBD-II Mode 01 request/response. pid_decode.c is the actual source of truth for decoding logic; this DBC documents the same signals in the industry-standard Vector DBC format.";
