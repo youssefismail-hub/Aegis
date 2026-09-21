@@ -48,3 +48,54 @@ int obd_decode_response(const can_frame_t *frame, uint8_t expected_pid, double *
             return -1; /* PID not implemented yet */
     }
 }
+void obd_build_dtc_request(can_frame_t *frame_out)
+{
+    memset(frame_out, 0, sizeof(*frame_out));
+    frame_out->id  = OBD_REQUEST_ID;
+    frame_out->dlc = 8;
+    frame_out->data[0] = 0x01; /* one data byte follows */
+    frame_out->data[1] = OBD_MODE_REQUEST_DTC;
+    /* No PID for Mode 03 — it requests all stored DTCs at once. */
+}
+
+static void decode_single_dtc(uint8_t a, uint8_t b, dtc_code_t *out)
+{
+    static const char category_letters[4] = {'P', 'C', 'B', 'U'};
+    static const char hex_chars[] = "0123456789ABCDEF";
+
+    uint8_t category = (a & 0xC0) >> 6; /* top 2 bits: P/C/B/U */
+    uint8_t digit1    = (a & 0x30) >> 4; /* next 2 bits: 0-3 */
+    uint8_t digit2    = a & 0x0F;        /* bottom 4 bits: hex digit */
+    uint8_t digit3    = (b & 0xF0) >> 4; /* top 4 bits of byte B */
+    uint8_t digit4    = b & 0x0F;        /* bottom 4 bits of byte B */
+
+    out->code[0] = category_letters[category];
+    out->code[1] = (char)('0' + digit1); /* digit1 is always 0-3, safe as decimal */
+    out->code[2] = hex_chars[digit2];
+    out->code[3] = hex_chars[digit3];
+    out->code[4] = hex_chars[digit4];
+    out->code[5] = '\0';
+}
+
+int obd_decode_dtc_response(const can_frame_t *frame, dtc_code_t *dtcs_out, int max_dtcs)
+{
+    if (!frame || !dtcs_out || max_dtcs <= 0) return -1;
+    if (frame->dlc < 2) return -1;
+    if (frame->data[1] != OBD_MODE_RESPONSE_DTC) return -1; /* not a positive Mode 03 response */
+
+    int count = 0;
+    /* DTCs start at byte index 2, two bytes each. */
+    for (int i = 2; i + 1 < frame->dlc && count < max_dtcs; i += 2) {
+        uint8_t a = frame->data[i];
+        uint8_t b = frame->data[i + 1];
+
+        if (a == 0x00 && b == 0x00) {
+            break; /* 0x0000 is padding, not a real DTC — stop here */
+        }
+
+        decode_single_dtc(a, b, &dtcs_out[count]);
+        count++;
+    }
+
+    return count;
+}
