@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <math.h>
 #include "../src/pid_decode.h"
+#include <string.h>
 
 static int g_failures = 0;
 
@@ -66,7 +67,65 @@ int main(void)
     f.data[3] = 0x64;
     CHECK(obd_decode_response(&f, OBD_PID_COOLANT_TEMP, &v) == -1,
           "Decode rejects a frame whose PID doesn't match what was requested");
+          /* DTC decode: bytes 0x03 0x01 -> P0301 (a classic misfire code) */
+    {
+        can_frame_t dtc_frame;
+        dtc_code_t dtcs[3];
+        int n;
 
+        dtc_frame.dlc = 4;
+        dtc_frame.data[0] = 0x03; dtc_frame.data[1] = OBD_MODE_RESPONSE_DTC;
+        dtc_frame.data[2] = 0x03; dtc_frame.data[3] = 0x01;
+
+        n = obd_decode_dtc_response(&dtc_frame, dtcs, 3);
+        CHECK(n == 1 && strcmp(dtcs[0].code, "P0301") == 0,
+              "DTC decode: 0x03 0x01 -> P0301");
+    }
+
+    /* DTC decode: category C, bytes 0x43 0x00 -> C0300 */
+    {
+        can_frame_t dtc_frame;
+        dtc_code_t dtcs[3];
+        int n;
+
+        dtc_frame.dlc = 4;
+        dtc_frame.data[0] = 0x03; dtc_frame.data[1] = OBD_MODE_RESPONSE_DTC;
+        dtc_frame.data[2] = 0x43; dtc_frame.data[3] = 0x00;
+
+        n = obd_decode_dtc_response(&dtc_frame, dtcs, 3);
+        CHECK(n == 1 && strcmp(dtcs[0].code, "C0300") == 0,
+              "DTC decode: 0x43 0x00 -> C0300 (category C)");
+    }
+
+    /* DTC decode: two DTCs in one frame */
+    {
+        can_frame_t dtc_frame;
+        dtc_code_t dtcs[3];
+        int n;
+
+        dtc_frame.dlc = 6;
+        dtc_frame.data[0] = 0x05; dtc_frame.data[1] = OBD_MODE_RESPONSE_DTC;
+        dtc_frame.data[2] = 0x03; dtc_frame.data[3] = 0x01; /* P0301 */
+        dtc_frame.data[4] = 0xC1; dtc_frame.data[5] = 0x23; /* U0123 */
+
+        n = obd_decode_dtc_response(&dtc_frame, dtcs, 3);
+        CHECK(n == 2 && strcmp(dtcs[0].code, "P0301") == 0 && strcmp(dtcs[1].code, "U0123") == 0,
+              "DTC decode: two DTCs in one frame, both correct and in order");
+    }
+
+    /* DTC decode: no active codes (all-zero padding) returns 0, not fake codes */
+    {
+        can_frame_t dtc_frame;
+        dtc_code_t dtcs[3];
+        int n;
+
+        dtc_frame.dlc = 4;
+        dtc_frame.data[0] = 0x01; dtc_frame.data[1] = OBD_MODE_RESPONSE_DTC;
+        dtc_frame.data[2] = 0x00; dtc_frame.data[3] = 0x00;
+
+        n = obd_decode_dtc_response(&dtc_frame, dtcs, 3);
+        CHECK(n == 0, "DTC decode: zero-padded frame with no active codes returns count 0");
+    }
     printf("\n%d failure(s)\n", g_failures);
     return g_failures == 0 ? 0 : 1;
 }
