@@ -70,3 +70,42 @@ def get_telemetry(
             for row in rows
         ],
     }
+@app.get("/api/v1/vehicles/{vehicle_id}/dtc")
+def get_dtc(vehicle_id: str, active_only: bool = Query(True, description="If true, exclude cleared DTCs")):
+    """
+    Returns DTC (Diagnostic Trouble Code) history for a vehicle's devices.
+    By default, only returns active (uncleared) codes — pass
+    active_only=false to see the full history including cleared codes.
+    """
+    query = """
+        SELECT e.code, e.description, e.severity, e.detected_at, e.cleared_at
+        FROM dtc_events e
+        JOIN devices d ON e.device_id = d.id
+        WHERE d.vehicle_id = %s
+    """
+    params = [vehicle_id]
+
+    if active_only:
+        query += " AND e.cleared_at IS NULL"
+
+    query += " ORDER BY e.detected_at DESC"
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            rows = cur.fetchall()
+
+    return {
+        "vehicle_id": vehicle_id,
+        "count": len(rows),
+        "dtcs": [
+            {
+                "code": row[0],
+                "description": row[1],
+                "severity": row[2],
+                "detected_at": row[3].isoformat(),
+                "cleared_at": row[4].isoformat() if row[4] else None,
+            }
+            for row in rows
+        ],
+    }
