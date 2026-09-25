@@ -2,6 +2,8 @@
 sovd-api — SOVD-inspired (Service-Oriented Vehicle Diagnostics) REST layer.
 See docs/decisions/0004-sovd-diagnostics-approach.md.
 """
+from fastapi import Depends
+from auth import require_auth
 
 from fastapi import FastAPI
 
@@ -92,3 +94,31 @@ def get_faults(component: str, vehicle_id: str, active_only: bool = True):
             for row in rows
         ],
     }
+@app.post("/components/{component}/faults/{code}/clear")
+def clear_fault(component: str, code: str, vehicle_id: str, _auth=Depends(require_auth)):
+    """
+    Clears a DTC by setting cleared_at. Gated behind require_auth —
+    unlike the GET endpoints above, this changes vehicle-side state and
+    must not be callable by an unauthenticated client.
+    """
+    query = """
+        UPDATE dtc_events e
+        SET cleared_at = now()
+        FROM devices d
+        WHERE e.device_id = d.id
+          AND d.vehicle_id = %s
+          AND e.code = %s
+          AND e.cleared_at IS NULL
+        RETURNING e.code
+    """
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, [vehicle_id, code])
+            result = cur.fetchone()
+            conn.commit()
+
+    if result is None:
+        return {"cleared": False, "reason": "no matching active fault found"}
+
+    return {"cleared": True, "code": result[0], "component": component}
