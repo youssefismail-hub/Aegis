@@ -11,10 +11,14 @@ carries the complexity and the update churn. See `docs/architecture.md`.
 
 ## Status
 
-- [ ] Zone controller SIL (Software-in-the-Loop) stage
+## Status
+
+- [x] Zone controller SIL (Software-in-the-Loop) stage — CAN HAL, PID + DTC decode logic, 10/10 unit tests passing
 - [ ] Zone controller on real hardware (Nucleo-G431KB + TJA1051T/3)
-- [ ] HPC node services (telemetry API, SOVD diagnostics API, OTA agent)
-- [ ] Cloud backend (TimescaleDB schema, AWS IoT Core wiring)
+- [x] HPC node services (telemetry-api, sovd-api) — read/write endpoints, JWT-gated writes, verified against live TimescaleDB
+- [x] Connectivity service — MQTT publish/subscribe bridging to TimescaleDB, verified end-to-end
+- [x] Cloud backend (local) — TimescaleDB schema running, AWS IoT Core migration path documented (ADR 0005), not yet implemented
+- [ ] OTA agent (A/B partitions)
 - [ ] PCB design
 - [ ] 3D enclosure
 - [ ] Real-vehicle integration test
