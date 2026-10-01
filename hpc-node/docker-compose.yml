@@ -1,0 +1,67 @@
+version: "3.9"
+
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    container_name: aegis-db
+    environment:
+      POSTGRES_PASSWORD: changeme_dev_only
+    ports:
+      - "5432:5432"
+    volumes:
+      - aegis_pgdata:/var/lib/postgresql/data
+      - ../cloud/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: aegis-mqtt
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto-config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+
+  telemetry-api:
+    build: ./services/telemetry-api
+    container_name: aegis-telemetry-api
+    environment:
+      DATABASE_URL: postgresql://postgres:changeme_dev_only@db:5432/postgres
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  sovd-api:
+    build: ./services/sovd-api
+    container_name: aegis-sovd-api
+    environment:
+      DATABASE_URL: postgresql://postgres:changeme_dev_only@db:5432/postgres
+      JWT_SECRET: dev-only-secret-change-in-real-deployment
+    ports:
+      - "8001:8001"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  connectivity-subscriber:
+    build: ./services/connectivity
+    container_name: aegis-connectivity-subscriber
+    environment:
+      DATABASE_URL: postgresql://postgres:changeme_dev_only@db:5432/postgres
+      MQTT_BROKER_HOST: mqtt
+      MQTT_BROKER_PORT: "1883"
+    depends_on:
+      db:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+
+volumes:
+  aegis_pgdata:
+    external: true
+    name: aegis_pgdata
