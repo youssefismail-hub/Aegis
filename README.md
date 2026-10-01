@@ -39,7 +39,18 @@ scripts/                    Dev environment setup helpers
 
 ## Getting started
 
-Start with `zone-controller-firmware/README.md`.
+**Fastest path — the whole HPC-node stack in one command:**
+```bash
+cd hpc-node
+docker compose up --build
+```
+Brings up TimescaleDB, Mosquitto, telemetry-api (:8000), sovd-api
+(:8001), and the MQTT-to-database subscriber, all networked together.
+See `hpc-node/README.md` for details.
+
+**Zone controller (no hardware needed):**
+Start with `zone-controller-firmware/README.md` — runs entirely in
+software against a virtual CAN bus..
 
 ## Design decisions
 
