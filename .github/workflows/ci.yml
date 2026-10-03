@@ -1,23 +1,25 @@
-name: zone-controller-firmware CI
+name: AEGIS CI
 
 on:
   push:
     paths:
       - 'zone-controller-firmware/**'
+      - 'hpc-node/services/**'
       - '.github/workflows/**'
   pull_request:
     paths:
       - 'zone-controller-firmware/**'
+      - 'hpc-node/services/**'
       - '.github/workflows/**'
 
 jobs:
-  build-and-test:
+  zone-controller-build-and-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential
+        run: sudo apt-get update && sudo apt-get install -y build-essential libssl-dev
 
       - name: Run unit tests
         working-directory: zone-controller-firmware
@@ -27,5 +29,31 @@ jobs:
         working-directory: zone-controller-firmware
         run: make all
 
-      - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential libssl-dev  
+  python-services-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [telemetry-api, sovd-api, connectivity, ota-agent]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        working-directory: hpc-node/services/${{ matrix.service }}
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+
+      - name: Run tests
+        working-directory: hpc-node/services/${{ matrix.service }}
+        run: |
+          if ls test_*.py 1> /dev/null 2>&1; then
+            python3 -m unittest discover -p "test_*.py" -v
+          else
+            echo "No test_*.py files found in ${{ matrix.service }} — skipping."
+          fi
