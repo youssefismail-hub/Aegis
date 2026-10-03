@@ -8,8 +8,8 @@
 #include "../src/pid_decode.h"
 #include <string.h>
 
-static int g_failures = 0;
-
+int g_failures = 0;
+void run_secure_boot_tests(void); 
 #define CHECK(cond, msg) do { \
     if (!(cond)) { \
         printf("FAIL: %s\n", msg); \
@@ -126,6 +126,7 @@ int main(void)
         n = obd_decode_dtc_response(&dtc_frame, dtcs, 3);
         CHECK(n == 0, "DTC decode: zero-padded frame with no active codes returns count 0");
     }
+        run_secure_boot_tests();
     printf("\n%d failure(s)\n", g_failures);
     return g_failures == 0 ? 0 : 1;
 }
