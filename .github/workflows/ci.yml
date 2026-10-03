@@ -4,9 +4,11 @@ on:
   push:
     paths:
       - 'zone-controller-firmware/**'
+      - '.github/workflows/**'
   pull_request:
     paths:
       - 'zone-controller-firmware/**'
+      - '.github/workflows/**'
 
 jobs:
   build-and-test:
