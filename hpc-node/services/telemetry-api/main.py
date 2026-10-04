@@ -6,7 +6,7 @@ and docs/decisions/0003-database-choice.md for why this stack was chosen.
 
 from datetime import datetime
 from typing import Optional
-
+from trips import SpeedReading, group_into_trips
 from fastapi import FastAPI, HTTPException, Query
 
 from db import get_connection
@@ -16,6 +16,45 @@ app = FastAPI(
     description="Fleet/telemetry REST + WebSocket API for the AEGIS HPC node.",
     version="0.2.0",
 )
+@app.get("/api/v1/vehicles/{vehicle_id}/trips")
+def get_trips(vehicle_id: str):
+    """
+    Returns trip-grouped history derived from the vehicle's speed
+    telemetry. See trips.py for the grouping/distance logic and its
+    honestly-documented limitation (time-gap heuristic, not a real
+    ignition signal).
+    """
+    query = """
+        SELECT t.time, t.value
+        FROM telemetry t
+        JOIN devices d ON t.device_id = d.id
+        WHERE d.vehicle_id = %s AND t.pid = 'speed'
+        ORDER BY t.time ASC
+    """
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, [vehicle_id])
+            rows = cur.fetchall()
+
+    readings = [SpeedReading(time=row[0], value=row[1]) for row in rows]
+    trips = group_into_trips(readings)
+
+    return {
+        "vehicle_id": vehicle_id,
+        "count": len(trips),
+        "trips": [
+            {
+                "start": trip.start.isoformat(),
+                "end": trip.end.isoformat(),
+                "duration_seconds": trip.duration_seconds,
+                "max_speed_kmh": trip.max_speed_kmh,
+                "avg_speed_kmh": trip.avg_speed_kmh,
+                "distance_km": round(trip.distance_km, 2),
+            }
+            for trip in trips
+        ],
+    }
 
 
 @app.get("/health")
