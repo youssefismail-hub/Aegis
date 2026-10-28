@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional
 from trips import SpeedReading, group_into_trips
 from fastapi import FastAPI, HTTPException, Query
-
+from consumption import FuelReading, estimate_consumption_l_per_100km
 from db import get_connection
 
 app = FastAPI(
@@ -19,44 +19,52 @@ app = FastAPI(
 @app.get("/api/v1/vehicles/{vehicle_id}/trips")
 def get_trips(vehicle_id: str):
     """
-    Returns trip-grouped history derived from the vehicle's speed
-    telemetry. See trips.py for the grouping/distance logic and its
-    honestly-documented limitation (time-gap heuristic, not a real
-    ignition signal).
+    Trip-grouped history derived from speed telemetry (see trips.py),
+    with an optional fuel consumption ESTIMATE per trip (see
+    consumption.py). The estimate is null whenever an honest number
+    isn't possible, which is common for short trips.
     """
-    query = """
+    speed_query = """
         SELECT t.time, t.value
         FROM telemetry t
         JOIN devices d ON t.device_id = d.id
         WHERE d.vehicle_id = %s AND t.pid = 'speed'
         ORDER BY t.time ASC
     """
+    fuel_query = """
+        SELECT t.time, t.value
+        FROM telemetry t
+        JOIN devices d ON t.device_id = d.id
+        WHERE d.vehicle_id = %s AND t.pid = 'fuel_level'
+        ORDER BY t.time ASC
+    """
 
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(query, [vehicle_id])
-            rows = cur.fetchall()
+            cur.execute(speed_query, [vehicle_id])
+            speed_rows = cur.fetchall()
+            cur.execute(fuel_query, [vehicle_id])
+            fuel_rows = cur.fetchall()
 
-    readings = [SpeedReading(time=row[0], value=row[1]) for row in rows]
-    trips = group_into_trips(readings)
+    speed_readings = [SpeedReading(time=r[0], value=r[1]) for r in speed_rows]
+    fuel_readings = [FuelReading(time=r[0], percent=r[1]) for r in fuel_rows]
+    trips = group_into_trips(speed_readings)
 
-    return {
-        "vehicle_id": vehicle_id,
-        "count": len(trips),
-        "trips": [
-            {
-                "start": trip.start.isoformat(),
-                "end": trip.end.isoformat(),
-                "duration_seconds": trip.duration_seconds,
-                "max_speed_kmh": trip.max_speed_kmh,
-                "avg_speed_kmh": trip.avg_speed_kmh,
-                "distance_km": round(trip.distance_km, 2),
-            }
-            for trip in trips
-        ],
-    }
+    result = []
+    for trip in trips:
+        window = [f for f in fuel_readings if trip.start <= f.time <= trip.end]
+        estimate = estimate_consumption_l_per_100km(window, trip.distance_km)
+        result.append({
+            "start": trip.start.isoformat(),
+            "end": trip.end.isoformat(),
+            "duration_seconds": trip.duration_seconds,
+            "max_speed_kmh": trip.max_speed_kmh,
+            "avg_speed_kmh": trip.avg_speed_kmh,
+            "distance_km": round(trip.distance_km, 2),
+            "estimated_l_per_100km": round(estimate, 2) if estimate is not None else None,
+        })
 
-
+    return {"vehicle_id": vehicle_id, "count": len(result), "trips": result}
 @app.get("/health")
 def health_check():
     """Basic liveness check — confirms the service is up and responding."""
